@@ -6,7 +6,7 @@ import os
 
 app = FastAPI()
 
-DB_FILE = "vasyochat_v2.db"
+DB_FILE = "vasyochat_anonim.db"
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
@@ -16,7 +16,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE,
             pin TEXT,
-            bio TEXT DEFAULT 'VasyoChat kullanıcısı',
+            bio TEXT DEFAULT 'Anonim VasyoChat Kullanıcısı',
             avatar TEXT DEFAULT 'https://i.imgur.com/6VBx3io.png'
         )
     """)
@@ -38,6 +38,13 @@ def init_db():
             status TEXT DEFAULT 'pending'
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS stickers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            creator TEXT,
+            url TEXT
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -50,7 +57,7 @@ def home():
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>VasyoChat - Telegram Style</title>
+    <title>VasyoChat - Anonim Sohbet</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -63,15 +70,15 @@ def home():
                 <img id="my-avatar" src="https://i.imgur.com/6VBx3io.png" class="w-10 h-10 rounded-full object-cover border border-indigo-500">
                 <div>
                     <h3 id="my-username-display" class="font-bold text-sm">Giriş Yapılmadı</h3>
-                    <span class="text-xs text-emerald-400">Çevrimiçi</span>
+                    <span class="text-xs text-emerald-400">Anonim Çevrimiçi</span>
                 </div>
             </div>
-            <div class="flex items-center space-x-3">
-                <button onclick="openRequestsModal()" class="text-slate-400 hover:text-indigo-400 text-sm relative" title="İstekler">
+            <div class="flex items-center space-x-2">
+                <button onclick="openRequestsModal()" class="text-slate-400 hover:text-indigo-400 text-sm relative p-2" title="İstekler">
                     <i class="fa-solid fa-user-plus"></i>
-                    <span id="req-badge" class="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center hidden">0</span>
+                    <span id="req-badge" class="absolute top-1 right-1 bg-red-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center hidden">0</span>
                 </button>
-                <button onclick="logout()" class="text-slate-400 hover:text-red-400 text-sm" title="Çıkış Yap"><i class="fa-solid fa-power-off"></i></button>
+                <button onclick="logout()" class="text-slate-400 hover:text-red-400 text-sm p-2" title="Çıkış Yap"><i class="fa-solid fa-power-off"></i></button>
             </div>
         </div>
 
@@ -83,7 +90,6 @@ def home():
             </div>
         </div>
 
-        <!-- ARAMA SONUÇLARI VEYA ARKADAŞ LİSTESİ -->
         <div id="user-list" class="flex-1 overflow-y-auto divide-y divide-slate-800/50"></div>
     </div>
 
@@ -97,6 +103,11 @@ def home():
                     <span class="text-xs text-slate-400" id="active-chat-bio"></span>
                 </div>
             </div>
+            <!-- SESLİ ARAMA BUTONU -->
+            <button onclick="startVoiceCall()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-medium flex items-center space-x-2 transition shadow" title="Telefon Numarasız Sesli Ara">
+                <i class="fa-solid fa-phone"></i>
+                <span>Sesli Ara</span>
+            </button>
         </div>
 
         <div id="chat-messages" class="flex-1 overflow-y-auto p-6 space-y-4 flex flex-col">
@@ -106,16 +117,59 @@ def home():
             </div>
         </div>
 
+        <!-- STİCKER PANELİ -->
+        <div id="sticker-panel" class="bg-[#162032] p-3 border-t border-slate-700 hidden">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-xs font-bold text-slate-300">Sticker Koleksiyonu</span>
+                <button onclick="openCreateStickerModal()" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1 rounded-lg">+ Sticker Oluştur</button>
+            </div>
+            <div id="sticker-container" class="flex space-x-2 overflow-x-auto py-1"></div>
+        </div>
+
+        <!-- MESAJ GİRİŞ ÇUBUĞU -->
         <div id="chat-input-bar" class="p-4 bg-[#1e293b] border-t border-slate-700 flex items-center space-x-3 hidden">
-            <label class="text-slate-400 hover:text-indigo-400 text-xl cursor-pointer px-2" title="Fotoğraf Gönder">
+            <button onclick="toggleStickerPanel()" class="text-slate-400 hover:text-indigo-400 text-xl px-1" title="Stickerlar"><i class="fa-solid fa-note-sticky"></i></button>
+            <button onclick="toggleVoiceRecord()" id="mic-btn" class="text-slate-400 hover:text-indigo-400 text-xl px-1" title="Sesli Mesaj"><i class="fa-solid fa-microphone"></i></button>
+            <label class="text-slate-400 hover:text-indigo-400 text-xl cursor-pointer px-1" title="Fotoğraf Gönder">
                 <i class="fa-solid fa-image"></i>
                 <input type="file" id="media-file-input" accept="image/*" onchange="sendMediaFile()" class="hidden">
             </label>
-            <input type="text" id="message-input" onkeypress="checkEnter(event)" placeholder="Mesaj yazın..." class="flex-1 bg-[#0f172a] text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-200 placeholder-slate-500">
-            <button onclick="sendMessage()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-3 rounded-xl font-medium transition flex items-center space-x-2">
+            <input type="text" id="message-input" onkeypress="checkEnter(event)" placeholder="Anonim mesaj yazın..." class="flex-1 bg-[#0f172a] text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-200 placeholder-slate-500">
+            <button onclick="sendMessage('text')" class="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-3 rounded-xl font-medium transition flex items-center space-x-2">
                 <span>Gönder</span>
                 <i class="fa-solid fa-paper-plane text-xs"></i>
             </button>
+        </div>
+    </div>
+
+    <!-- SESLİ ARAMA MODALI -->
+    <div id="call-modal" class="fixed inset-0 bg-black/80 hidden flex items-center justify-center z-50">
+        <div class="bg-[#1e293b] p-8 rounded-3xl w-80 text-center space-y-6 border border-slate-700 shadow-2xl">
+            <div class="relative w-24 h-24 mx-auto">
+                <img id="call-avatar" src="" class="w-24 h-24 rounded-full object-cover border-4 border-emerald-500 animate-pulse">
+            </div>
+            <div>
+                <h3 id="call-username" class="text-lg font-bold">Kişi</h3>
+                <span class="text-xs text-emerald-400 animate-pulse" id="call-status">Sesli Arama Gerçekleşiyor...</span>
+            </div>
+            <div class="flex justify-center space-x-4 pt-2">
+                <button onclick="endVoiceCall()" class="bg-red-600 hover:bg-red-500 text-white w-14 h-14 rounded-full text-lg shadow-lg flex items-center justify-center transition"><i class="fa-solid fa-phone-slash"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- STİCKER OLUŞTURMA MODALI -->
+    <div id="sticker-modal" class="fixed inset-0 bg-black/70 hidden flex items-center justify-center z-50">
+        <div class="bg-[#1e293b] p-6 rounded-2xl w-96 border border-slate-700 space-y-4 shadow-2xl">
+            <h3 class="text-lg font-bold">Yeni Sticker Oluştur</h3>
+            <div>
+                <label class="text-xs text-slate-400">Görsel URL (İnternet adresi)</label>
+                <input type="text" id="new-sticker-url" placeholder="https://ornek.com/resim.png" class="w-full bg-[#0f172a] text-sm p-2.5 rounded-lg border border-slate-700 text-slate-200 mt-1">
+            </div>
+            <div class="flex justify-end space-x-2 pt-2">
+                <button onclick="closeCreateStickerModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm">İptal</button>
+                <button onclick="saveNewSticker()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium">Sticker Üret</button>
+            </div>
         </div>
     </div>
 
@@ -123,7 +177,7 @@ def home():
     <div id="requests-modal" class="fixed inset-0 bg-black/70 hidden flex items-center justify-center z-50">
         <div class="bg-[#1e293b] p-6 rounded-2xl w-96 border border-slate-700 space-y-4 shadow-2xl">
             <div class="flex justify-between items-center">
-                <h3 class="text-lg font-bold">Arkadaşlık İstekleri</h3>
+                <h3 class="text-lg font-bold">Anonim İstekler</h3>
                 <button onclick="closeRequestsModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div id="requests-list" class="space-y-2 max-h-60 overflow-y-auto">
@@ -135,13 +189,13 @@ def home():
     <!-- PROFIL MODALI -->
     <div id="profile-modal" class="fixed inset-0 bg-black/70 hidden flex items-center justify-center z-50">
         <div class="bg-[#1e293b] p-6 rounded-2xl w-96 border border-slate-700 space-y-4 shadow-2xl">
-            <h3 class="text-lg font-bold">Profilini Düzenle</h3>
+            <h3 class="text-lg font-bold">Anonim Profilini Düzenle</h3>
             <div class="text-center">
                 <img id="modal-avatar-preview" src="" class="w-20 h-20 rounded-full mx-auto object-cover border-2 border-indigo-500 mb-2">
                 <input type="text" id="edit-avatar-url" placeholder="Avatar Resim URL'si" class="w-full bg-[#0f172a] text-xs p-2 rounded-lg border border-slate-700 text-slate-300">
             </div>
             <div>
-                <label class="text-xs text-slate-400">Biyografi</label>
+                <label class="text-xs text-slate-400">Anonim Biyografi</label>
                 <input type="text" id="edit-bio" class="w-full bg-[#0f172a] text-sm p-2.5 rounded-lg border border-slate-700 text-slate-200 mt-1">
             </div>
             <div class="flex justify-end space-x-2 pt-2">
@@ -154,17 +208,20 @@ def home():
     <!-- GİRİŞ MODALI -->
     <div id="auth-modal" class="fixed inset-0 bg-[#0f172a] z-50 flex items-center justify-center">
         <div class="bg-[#1e293b] p-8 rounded-2xl w-96 border border-slate-700 space-y-6 shadow-2xl text-center">
-            <div class="text-indigo-500 text-4xl mb-2"><i class="fa-brands fa-telegram"></i></div>
-            <h2 class="text-xl font-bold">VasyoChat'e Hoş Geldin</h2>
-            <input type="text" id="auth-username" placeholder="Kullanıcı Adı" class="w-full bg-[#0f172a] text-sm p-3 rounded-xl border border-slate-700 text-slate-200">
-            <input type="password" id="auth-pin" placeholder="Şifre / PIN" class="w-full bg-[#0f172a] text-sm p-3 rounded-xl border border-slate-700 text-slate-200">
-            <button onclick="loginUser()" class="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-xl font-bold transition">Giriş Yap / Kaydol</button>
+            <div class="text-indigo-500 text-4xl mb-2"><i class="fa-solid fa-mask"></i></div>
+            <h2 class="text-xl font-bold">VasyoChat Anonim Giriş</h2>
+            <input type="text" id="auth-username" placeholder="Rumuz / Kullanıcı Adı" class="w-full bg-[#0f172a] text-sm p-3 rounded-xl border border-slate-700 text-slate-200">
+            <input type="password" id="auth-pin" placeholder="Gizli PIN" class="w-full bg-[#0f172a] text-sm p-3 rounded-xl border border-slate-700 text-slate-200">
+            <button onclick="loginUser()" class="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-xl font-bold transition">Bağlan</button>
         </div>
     </div>
 
     <script>
         let currentUser = localStorage.getItem("vasyo_user") || null;
         let currentTarget = null;
+        let mediaRecorder;
+        let audioChunks = [];
+        let localStream;
 
         window.onload = () => {
             if (!currentUser) {
@@ -178,7 +235,7 @@ def home():
         async function loginUser() {
             let u = document.getElementById("auth-username").value.trim();
             let p = document.getElementById("auth-pin").value.trim();
-            if(!u || !p) return alert("Kullanıcı adı ve şifre gir!");
+            if(!u || !p) return alert("Rumuz ve PIN gir!");
             
             let res = await fetch("/api/login", {
                 method: "POST",
@@ -205,6 +262,7 @@ def home():
             document.getElementById("my-username-display").innerText = currentUser;
             await loadFriends();
             await checkRequestsCount();
+            await loadStickers();
             setInterval(() => {
                 loadFriends();
                 checkRequestsCount();
@@ -216,24 +274,23 @@ def home():
             let res = await fetch(`/api/friends?username=${encodeURIComponent(currentUser)}`);
             let friends = await res.json();
             let list = document.getElementById("user-list");
-            
-            // Eğer arama çubuğu boşsa arkadaş listesini göster
             let query = document.getElementById("search-box").value.trim();
+            
             if(!query.startsWith("@")) {
                 list.innerHTML = "";
                 friends.forEach(u => {
-                    if(u.username === currentUser) {
-                        document.getElementById("my-avatar").src = u.avatar;
+                    if(u.username.toLowerCase() === currentUser.toLowerCase()) {
+                        document.getElementById("my-avatar").src = u.avatar || "https://i.imgur.com/6VBx3io.png";
                         return;
                     }
                     let div = document.createElement("div");
                     div.className = `flex items-center space-x-3 p-3 cursor-pointer hover:bg-slate-800/60 transition ${currentTarget === u.username ? 'bg-slate-800' : ''}`;
                     div.onclick = () => selectChat(u.username, u.avatar, u.bio);
                     div.innerHTML = `
-                        <img src="${u.avatar}" class="w-11 h-11 rounded-full object-cover">
+                        <img src="${u.avatar || 'https://i.imgur.com/6VBx3io.png'}" class="w-11 h-11 rounded-full object-cover">
                         <div class="flex-1 min-w-0">
                             <h4 class="font-bold text-sm truncate">${u.username}</h4>
-                            <p class="text-xs text-slate-400 truncate">${u.bio}</p>
+                            <p class="text-xs text-slate-400 truncate">${u.bio || 'Anonim Kullanıcı'}</p>
                         </div>
                     `;
                     list.appendChild(div);
@@ -250,22 +307,22 @@ def home():
                 return;
             }
 
-            let searchterm = query.substring(1);
+            let searchterm = query.substring(1).trim();
             let res = await fetch(`/api/search-user?query=${encodeURIComponent(searchterm)}¤t=${encodeURIComponent(currentUser)}`);
             let user = await res.json();
 
             list.innerHTML = "";
             if(user.error) {
-                list.innerHTML = `<div class="p-4 text-xs text-slate-500 text-center">Kullanıcı bulunamadı.</div>`;
+                list.innerHTML = `<div class="p-4 text-xs text-slate-500 text-center">Anonim kullanıcı bulunamadı.</div>`;
             } else {
                 let div = document.createElement("div");
                 div.className = "flex items-center justify-between p-3 bg-slate-800/40";
                 div.innerHTML = `
                     <div class="flex items-center space-x-3">
-                        <img src="${user.avatar}" class="w-10 h-10 rounded-full object-cover">
+                        <img src="${user.avatar || 'https://i.imgur.com/6VBx3io.png'}" class="w-10 h-10 rounded-full object-cover">
                         <div>
                             <h4 class="font-bold text-sm">${user.username}</h4>
-                            <p class="text-xs text-slate-400">${user.bio}</p>
+                            <p class="text-xs text-slate-400">${user.bio || 'Anonim Kullanıcı'}</p>
                         </div>
                     </div>
                     <button onclick="sendRequest('${user.username}')" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium">Ekle</button>
@@ -312,7 +369,7 @@ def home():
                     div.className = "flex items-center justify-between bg-[#0f172a] p-3 rounded-xl border border-slate-700";
                     div.innerHTML = `
                         <div class="flex items-center space-x-3">
-                            <img src="${r.avatar}" class="w-9 h-9 rounded-full object-cover">
+                            <img src="${r.avatar || 'https://i.imgur.com/6VBx3io.png'}" class="w-9 h-9 rounded-full object-cover">
                             <span class="text-sm font-bold">${r.sender}</span>
                         </div>
                         <div class="space-x-1">
@@ -343,22 +400,22 @@ def home():
             document.getElementById("chat-header").classList.remove("hidden");
             document.getElementById("chat-input-bar").classList.remove("hidden");
             document.getElementById("active-chat-name").innerText = username;
-            document.getElementById("active-chat-avatar").src = avatar;
-            document.getElementById("active-chat-bio").innerText = bio;
+            document.getElementById("active-chat-avatar").src = avatar || 'https://i.imgur.com/6VBx3io.png';
+            document.getElementById("active-chat-bio").innerText = bio || 'Anonim Kullanıcı';
             loadMessages();
         }
 
-        async function sendMessage() {
+        async function sendMessage(type, contentOverride = null) {
             let input = document.getElementById("message-input");
-            let text = input.value.trim();
+            let text = contentOverride || input.value.trim();
             if(!text || !currentTarget) return;
 
             await fetch("/api/send", {
                 method: "POST",
                 headers: {"Content-Type": "application/x-www-form-urlencoded"},
-                body: `sender=${encodeURIComponent(currentUser)}&receiver=${encodeURIComponent(currentTarget)}&content=${encodeURIComponent(text)}&msg_type=text`
+                body: `sender=${encodeURIComponent(currentUser)}&receiver=${encodeURIComponent(currentTarget)}&content=${encodeURIComponent(text)}&msg_type=${type}`
             });
-            input.value = "";
+            if(!contentOverride) input.value = "";
             loadMessages();
         }
 
@@ -369,17 +426,95 @@ def home():
             let reader = new FileReader();
             reader.readAsDataURL(file);
             reader.onloadend = async () => {
-                await fetch("/api/send", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/x-www-form-urlencoded"},
-                    body: `sender=${encodeURIComponent(currentUser)}&receiver=${encodeURIComponent(currentTarget)}&content=${encodeURIComponent(reader.result)}&msg_type=image`
-                });
-                loadMessages();
+                await sendMessage('image', reader.result);
             };
         }
 
+        async function toggleVoiceRecord() {
+            let btn = document.getElementById("mic-btn");
+            if (!mediaRecorder || mediaRecorder.state === "inactive") {
+                let stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                mediaRecorder.onstop = async () => {
+                    let blob = new Blob(audioChunks, { type: 'audio/webm' });
+                    let reader = new FileReader();
+                    reader.readAsDataURL(blob);
+                    reader.onloadend = async () => {
+                        await sendMessage('voice', reader.result);
+                    };
+                };
+                mediaRecorder.start();
+                btn.classList.add("text-red-500", "animate-pulse");
+            } else {
+                mediaRecorder.stop();
+                btn.classList.remove("text-red-500", "animate-pulse");
+            }
+        }
+
+        async function startVoiceCall() {
+            if(!currentTarget) return;
+            document.getElementById("call-username").innerText = currentTarget;
+            document.getElementById("call-avatar").src = document.getElementById("active-chat-avatar").src;
+            document.getElementById("call-modal").classList.remove("hidden");
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            } catch(e) {
+                alert("Mikrofon izni alınamadı!");
+                endVoiceCall();
+            }
+        }
+
+        function endVoiceCall() {
+            if(localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            document.getElementById("call-modal").classList.add("hidden");
+        }
+
+        function toggleStickerPanel() {
+            let panel = document.getElementById("sticker-panel");
+            panel.classList.toggle("hidden");
+        }
+
+        async function loadStickers() {
+            let res = await fetch("/api/stickers");
+            let stickers = await res.json();
+            let container = document.getElementById("sticker-container");
+            container.innerHTML = "";
+            stickers.forEach(s => {
+                let img = document.createElement("img");
+                img.src = s.url;
+                img.className = "w-14 h-14 object-cover rounded-xl cursor-pointer hover:scale-110 transition bg-slate-800 p-1";
+                img.onclick = () => sendMessage('sticker', s.url);
+                container.appendChild(img);
+            });
+        }
+
+        function openCreateStickerModal() {
+            document.getElementById("sticker-modal").classList.remove("hidden");
+        }
+        function closeCreateStickerModal() {
+            document.getElementById("sticker-modal").classList.add("hidden");
+        }
+
+        async function saveNewSticker() {
+            let url = document.getElementById("new-sticker-url").value.trim();
+            if(!url) return;
+            await fetch("/api/add-sticker", {
+                method: "POST",
+                headers: {"Content-Type": "application/x-www-form-urlencoded"},
+                body: `creator=${encodeURIComponent(currentUser)}&url=${encodeURIComponent(url)}`
+            });
+            document.getElementById("new-sticker-url").value = "";
+            closeCreateStickerModal();
+            loadStickers();
+            alert("Sticker başarıyla oluşturuldu!");
+        }
+
         async function deleteMessage(msgId) {
-            if(!confirm("Bu mesajı silmek istiyor musun?")) return;
+            if(!confirm("Mesajı silmek istiyor musun?")) return;
             await fetch(`/api/delete-message?id=${msgId}`, { method: "POST" });
             loadMessages();
         }
@@ -391,7 +526,7 @@ def home():
             let box = document.getElementById("chat-messages");
             box.innerHTML = "";
             msgs.forEach(m => {
-                let isMe = m.sender === currentUser;
+                let isMe = m.sender.toLowerCase() === currentUser.toLowerCase();
                 let div = document.createElement("div");
                 div.className = `flex flex-col ${isMe ? 'items-end' : 'items-start'} my-1 group`;
                 
@@ -400,6 +535,10 @@ def home():
                     contentHtml = `<p class="text-sm">${m.content}</p>`;
                 } else if(m.msg_type === 'image') {
                     contentHtml = `<img src="${m.content}" class="max-w-xs rounded-xl cursor-pointer" onclick="window.open(this.src)">`;
+                } else if(m.msg_type === 'voice') {
+                    contentHtml = `<audio controls src="${m.content}" class="h-10 w-48"></audio>`;
+                } else if(m.msg_type === 'sticker') {
+                    contentHtml = `<img src="${m.content}" class="w-28 h-28 object-contain">`;
                 }
 
                 let deleteBtn = isMe ? `<button onclick="deleteMessage(${m.id})" class="text-[10px] text-red-400 hover:text-red-300 ml-2 hidden group-hover:inline" title="Sil"><i class="fa-solid fa-trash"></i></button>` : "";
@@ -418,15 +557,15 @@ def home():
             box.scrollTop = box.scrollHeight;
         }
 
-        function checkEnter(e) { if(e.key === 'Enter') sendMessage(); }
+        function checkEnter(e) { if(e.key === 'Enter') sendMessage('text'); }
 
         async function openProfileModal() {
             let res = await fetch(`/api/search-user?query=${encodeURIComponent(currentUser)}¤t=`);
             let me = await res.json();
             if(me) {
-                document.getElementById("edit-avatar-url").value = me.avatar;
-                document.getElementById("edit-bio").value = me.bio;
-                document.getElementById("modal-avatar-preview").src = me.avatar;
+                document.getElementById("edit-avatar-url").value = me.avatar || "";
+                document.getElementById("edit-bio").value = me.bio || "";
+                document.getElementById("modal-avatar-preview").src = me.avatar || "https://i.imgur.com/6VBx3io.png";
             }
             document.getElementById("profile-modal").classList.remove("hidden");
         }
@@ -452,7 +591,7 @@ def home():
 def login(username: str = Form(...), pin: str = Form(...)):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+    cursor.execute("SELECT * FROM users WHERE LOWER(username) = LOWER(?)", (username,))
     user = cursor.fetchone()
     if not user:
         cursor.execute("INSERT INTO users (username, pin) VALUES (?, ?)", (username, pin))
@@ -464,18 +603,26 @@ def login(username: str = Form(...), pin: str = Form(...)):
 def search_user(query: str, current: str):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT username, bio, avatar FROM users WHERE username = ?", (query,))
+    cursor.execute("SELECT username, bio, avatar FROM users WHERE LOWER(username) = LOWER(?)", (query,))
     r = cursor.fetchone()
     conn.close()
-    if not r or r[0] == current:
+    if not r or r[0].lower() == current.lower():
         return {"error": "not found"}
-    return {"username": r[0], "bio": r[1], "avatar": r[2]}
+    return {
+        "username": r[0], 
+        "bio": r[1] or "Anonim VasyoChat Kullanıcısı", 
+        "avatar": r[2] or "https://i.imgur.com/6VBx3io.png"
+    }
 
 @app.post("/api/send-request")
 def send_request(sender: str = Form(...), receiver: str = Form(...)):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM requests WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?)", (sender, receiver, receiver, sender))
+    cursor.execute("""
+        SELECT * FROM requests 
+        WHERE (LOWER(sender) = LOWER(?) AND LOWER(receiver) = LOWER(?)) 
+           OR (LOWER(sender) = LOWER(?) AND LOWER(receiver) = LOWER(?))
+    """, (sender, receiver, receiver, sender))
     existing = cursor.fetchone()
     if existing:
         conn.close()
@@ -483,19 +630,19 @@ def send_request(sender: str = Form(...), receiver: str = Form(...)):
     cursor.execute("INSERT INTO requests (sender, receiver, status) VALUES (?, ?, 'pending')", (sender, receiver))
     conn.commit()
     conn.close()
-    return {"message": "Arkadaşlık isteği gönderildi!"}
+    return {"message": "Anonim arkadaşlık isteği gönderildi!"}
 
 @app.get("/api/get-requests")
 def get_requests(username: str):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, sender FROM requests WHERE receiver = ? AND status = 'pending'", (username,))
+    cursor.execute("SELECT id, sender FROM requests WHERE LOWER(receiver) = LOWER(?) AND status = 'pending'", (username,))
     rows = cursor.fetchall()
     result = []
     for r in rows:
-        cursor.execute("SELECT avatar FROM users WHERE username = ?", (r[1],))
+        cursor.execute("SELECT avatar FROM users WHERE LOWER(username) = LOWER(?)", (r[1],))
         u = cursor.fetchone()
-        avatar = u[0] if u else "https://i.imgur.com/6VBx3io.png"
+        avatar = (u and u[0]) or "https://i.imgur.com/6VBx3io.png"
         result.append({"id": r[0], "sender": r[1], "avatar": avatar})
     conn.close()
     return result
@@ -518,22 +665,26 @@ def get_friends(username: str):
     cursor = conn.cursor()
     cursor.execute("""
         SELECT sender, receiver FROM requests 
-        WHERE (sender = ? OR receiver = ?) AND status = 'accepted'
+        WHERE (LOWER(sender) = LOWER(?) OR LOWER(receiver) = LOWER(?)) AND status = 'accepted'
     """, (username, username))
     rows = cursor.fetchall()
     friend_names = set()
     for r in rows:
-        if r[0] == username:
+        if r[0].lower() == username.lower():
             friend_names.add(r[1])
         else:
             friend_names.add(r[0])
     
     friends = []
     for f in friend_names:
-        cursor.execute("SELECT username, bio, avatar FROM users WHERE username = ?", (f,))
+        cursor.execute("SELECT username, bio, avatar FROM users WHERE LOWER(username) = LOWER(?)", (f,))
         u = cursor.fetchone()
         if u:
-            friends.append({"username": u[0], "bio": u[1], "avatar": u[2]})
+            friends.append({
+                "username": u[0], 
+                "bio": u[1] or "Anonim VasyoChat Kullanıcısı", 
+                "avatar": u[2] or "https://i.imgur.com/6VBx3io.png"
+            })
     conn.close()
     return friends
 
@@ -541,7 +692,7 @@ def get_friends(username: str):
 def update_profile(username: str = Form(...), avatar: str = Form(...), bio: str = Form(...)):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("UPDATE users SET avatar = ?, bio = ? WHERE username = ?", (avatar, bio, username))
+    cursor.execute("UPDATE users SET avatar = ?, bio = ? WHERE LOWER(username) = LOWER(?)", (avatar, bio, username))
     conn.commit()
     conn.close()
     return {"status": "ok"}
@@ -570,9 +721,28 @@ def get_messages(user1: str, user2: str):
     cursor = conn.cursor()
     cursor.execute("""
         SELECT id, sender, receiver, content, msg_type, timestamp FROM messages 
-        WHERE (sender = ? AND receiver = ?) OR (sender = ? AND receiver = ?)
+        WHERE (LOWER(sender) = LOWER(?) AND LOWER(receiver) = LOWER(?)) 
+           OR (LOWER(sender) = LOWER(?) AND LOWER(receiver) = LOWER(?))
         ORDER BY id ASC
     """, (user1, user2, user2, user1))
     rows = cursor.fetchall()
     conn.close()
     return [{"id": r[0], "sender": r[1], "receiver": r[2], "content": r[3], "msg_type": r[4], "timestamp": r[5]} for r in rows]
+
+@app.get("/api/stickers")
+def get_stickers():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, creator, url FROM stickers")
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"id": r[0], "creator": r[1], "url": r[2]} for r in rows]
+
+@app.post("/api/add-sticker")
+def add_sticker(creator: str = Form(...), url: str = Form(...)):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO stickers (creator, url) VALUES (?, ?)", (creator, url))
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
