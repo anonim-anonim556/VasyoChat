@@ -1,5 +1,5 @@
 import sqlite3
-from fastapi import FastAPI, Request, HTTPException, Form, UploadFile, File
+from fastapi import FastAPI, Request, HTTPException, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 import shutil
 import os
@@ -48,9 +48,8 @@ def home():
 </head>
 <body class="bg-[#0f172a] text-slate-100 h-screen flex overflow-hidden font-sans select-none">
 
-    <!-- SOL KENAR ÇUBUĞU (Kişiler, Arama, Profil) -->
+    <!-- SOL KENAR ÇUBUĞU -->
     <div class="w-80 bg-[#1e293b] border-r border-slate-700 flex flex-col">
-        <!-- Header & Profil -->
         <div class="p-4 bg-[#0f172a] flex items-center justify-between border-b border-slate-700">
             <div class="flex items-center space-x-3 cursor-pointer" onclick="openProfileModal()">
                 <img id="my-avatar" src="https://i.imgur.com/6VBx3io.png" class="w-10 h-10 rounded-full object-cover border border-indigo-500">
@@ -62,23 +61,19 @@ def home():
             <button onclick="logout()" class="text-slate-400 hover:text-red-400 text-sm" title="Çıkış Yap"><i class="fa-solid fa-power-off"></i></button>
         </div>
 
-        <!-- Arama Çubuğu -->
+        <!-- KİŞİ / SOHBET ARAMA ÇUBUĞU -->
         <div class="p-3">
             <div class="relative">
                 <i class="fa-solid fa-search absolute left-3 top-3 text-slate-400 text-sm"></i>
-                <input type="text" id="search-box" oninput="filterUsers()" placeholder="Kişi veya mesaj ara..." class="w-full bg-[#0f172a] text-sm rounded-xl pl-9 pr-4 py-2.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-200 placeholder-slate-500">
+                <input type="text" id="search-box" oninput="filterUsers()" placeholder="Kişi veya sohbet ara..." class="w-full bg-[#0f172a] text-sm rounded-xl pl-9 pr-4 py-2.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-200 placeholder-slate-500">
             </div>
         </div>
 
-        <!-- Sohbet Listesi -->
-        <div id="user-list" class="flex-1 overflow-y-auto divide-y divide-slate-800/50">
-            <!-- Dinamik dolacak -->
-        </div>
+        <div id="user-list" class="flex-1 overflow-y-auto divide-y divide-slate-800/50"></div>
     </div>
 
     <!-- SAĞ ANA SOHBET EKRANI -->
     <div class="flex-1 flex flex-col bg-[#0b1329]">
-        <!-- Sohbet Üst Bilgi -->
         <div id="chat-header" class="h-16 bg-[#1e293b] border-b border-slate-700 px-6 flex items-center justify-between hidden">
             <div class="flex items-center space-x-3">
                 <img id="active-chat-avatar" src="" class="w-10 h-10 rounded-full object-cover">
@@ -87,15 +82,8 @@ def home():
                     <span class="text-xs text-slate-400" id="active-chat-bio"></span>
                 </div>
             </div>
-            <div class="flex items-center space-x-4 text-slate-300">
-                <button onclick="startCall('voice')" class="p-2 hover:bg-slate-700 rounded-full transition" title="Sesli Arama"><i class="fa-solid fa-phone"></i></button>
-                <button onclick="startCall('video')" class="p-2 hover:bg-slate-700 rounded-full transition" title="Görüntülü Arama"><i class="fa-solid fa-video"></i></button>
-                <button onclick="startScreenShare()" class="p-2 hover:bg-slate-700 rounded-full transition" title="Ekran Paylaşımı"><i class="fa-solid fa-desktop"></i></button>
-                <button onclick="openMediaGallery()" class="p-2 hover:bg-slate-700 rounded-full transition" title="Medya Galerisi"><i class="fa-solid fa-images"></i></button>
-            </div>
         </div>
 
-        <!-- Mesajlar Alanı -->
         <div id="chat-messages" class="flex-1 overflow-y-auto p-6 space-y-4 flex flex-col">
             <div class="m-auto text-center text-slate-500">
                 <i class="fa-regular fa-comments text-5xl mb-2"></i>
@@ -103,10 +91,9 @@ def home():
             </div>
         </div>
 
-        <!-- Mesaj Gönderme Çubuğu -->
         <div id="chat-input-bar" class="p-4 bg-[#1e293b] border-t border-slate-700 flex items-center space-x-3 hidden">
             <button onclick="toggleVoiceRecord()" id="mic-btn" class="text-slate-400 hover:text-indigo-400 text-xl px-2 transition" title="Sesli Mesaj"><i class="fa-solid fa-microphone"></i></button>
-            <label class="text-slate-400 hover:text-indigo-400 text-xl cursor-pointer px-2" title="Dosya/Fotoğraf Gönder">
+            <label class="text-slate-400 hover:text-indigo-400 text-xl cursor-pointer px-2" title="Fotoğraf Gönder">
                 <i class="fa-solid fa-paperclip"></i>
                 <input type="file" id="media-file-input" onchange="sendMediaFile()" class="hidden">
             </label>
@@ -118,7 +105,7 @@ def home():
         </div>
     </div>
 
-    <!-- PROFIL DÜZENLEME MODALI -->
+    <!-- PROFIL MODALI -->
     <div id="profile-modal" class="fixed inset-0 bg-black/70 hidden flex items-center justify-center z-50">
         <div class="bg-[#1e293b] p-6 rounded-2xl w-96 border border-slate-700 space-y-4 shadow-2xl">
             <h3 class="text-lg font-bold">Profilini Düzenle</h3>
@@ -127,7 +114,7 @@ def home():
                 <input type="text" id="edit-avatar-url" placeholder="Avatar Resim URL'si" class="w-full bg-[#0f172a] text-xs p-2 rounded-lg border border-slate-700 text-slate-300">
             </div>
             <div>
-                <label class="text-xs text-slate-400">Biyografi / Durum</label>
+                <label class="text-xs text-slate-400">Biyografi</label>
                 <input type="text" id="edit-bio" class="w-full bg-[#0f172a] text-sm p-2.5 rounded-lg border border-slate-700 text-slate-200 mt-1">
             </div>
             <div class="flex justify-end space-x-2 pt-2">
@@ -137,12 +124,11 @@ def home():
         </div>
     </div>
 
-    <!-- GİRİŞ / KAYIT MODALI (İlk Açılışta Otomatik) -->
+    <!-- GİRİŞ MODALI -->
     <div id="auth-modal" class="fixed inset-0 bg-[#0f172a] z-50 flex items-center justify-center">
         <div class="bg-[#1e293b] p-8 rounded-2xl w-96 border border-slate-700 space-y-6 shadow-2xl text-center">
             <div class="text-indigo-500 text-4xl mb-2"><i class="fa-brands fa-telegram"></i></div>
             <h2 class="text-xl font-bold">VasyoChat'e Hoş Geldin</h2>
-            <p class="text-xs text-slate-400">Devam etmek için kullanıcı adını ve şifreni gir.</p>
             <input type="text" id="auth-username" placeholder="Kullanıcı Adı" class="w-full bg-[#0f172a] text-sm p-3 rounded-xl border border-slate-700 text-slate-200">
             <input type="password" id="auth-pin" placeholder="Şifre / PIN" class="w-full bg-[#0f172a] text-sm p-3 rounded-xl border border-slate-700 text-slate-200">
             <button onclick="loginUser()" class="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-xl font-bold transition">Giriş Yap / Kaydol</button>
@@ -154,11 +140,13 @@ def home():
         let currentTarget = null;
         let mediaRecorder;
         let audioChunks = [];
+        let allUsers = [];
 
         window.onload = () => {
             if (!currentUser) {
                 document.getElementById("auth-modal").classList.remove("hidden");
             } else {
+                document.getElementById("auth-modal").classList.add("hidden");
                 initApp();
             }
         };
@@ -191,14 +179,18 @@ def home():
 
         async function initApp() {
             document.getElementById("my-username-display").innerText = currentUser;
-            loadUsers();
+            await loadUsers();
             setInterval(loadUsers, 5000);
             if(currentTarget) loadMessages();
         }
 
         async function loadUsers() {
             let res = await fetch(`/api/users?current=${encodeURIComponent(currentUser)}`);
-            let users = await res.json();
+            allUsers = await res.json();
+            renderUserList(allUsers);
+        }
+
+        function renderUserList(users) {
             let list = document.getElementById("user-list");
             list.innerHTML = "";
             users.forEach(u => {
@@ -218,6 +210,12 @@ def home():
                 `;
                 list.appendChild(div);
             });
+        }
+
+        function filterUsers() {
+            let query = document.getElementById("search-box").value.toLowerCase();
+            let filtered = allUsers.filter(u => u.username.toLowerCase().includes(query));
+            renderUserList(filtered);
         }
 
         function selectChat(username, avatar, bio) {
@@ -278,7 +276,6 @@ def home():
 
         function checkEnter(e) { if(e.key === 'Enter') sendMessage(); }
 
-        // Profil Modal Fonksiyonları
         async function openProfileModal() {
             let res = await fetch(`/api/users?current=${encodeURIComponent(currentUser)}`);
             let users = await res.json();
@@ -304,7 +301,6 @@ def home():
             loadUsers();
         }
 
-        // Ses Kaydı
         async function toggleVoiceRecord() {
             let btn = document.getElementById("mic-btn");
             if (!mediaRecorder || mediaRecorder.state === "inactive") {
@@ -333,7 +329,6 @@ def home():
             }
         }
 
-        // Medya/Fotoğraf Gönderme
         async function sendMediaFile() {
             let fileInput = document.getElementById("media-file-input");
             if(fileInput.files.length === 0 || !currentTarget) return;
@@ -349,11 +344,6 @@ def home():
                 loadMessages();
             };
         }
-
-        function startCall(type) { alert(type === 'voice' ? "Sesli arama başlatılıyor..." : "Görüntülü arama başlatılıyor..."); }
-        function startScreenShare() { alert("Ekran paylaşımı başlatılıyor..."); }
-        function openMediaGallery() { alert("Medya galerisi açılıyor (Paylaşılan fotoğraflar burada listelenir)."); }
-        function filterUsers() { /* Arama fonksiyonu */ }
     </script>
 </body>
 </html>
